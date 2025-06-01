@@ -45,6 +45,57 @@ client.on('messageCreate', async (message) => {
     const serverQueue = serverQueues.get(message.guild.id);
     const args = message.content.slice(1).trim().split(/ +/);
     const command = args.shift().toLowerCase();
+    
+client.on('voiceStateUpdate', (oldState, newState) => {
+    const guildId = oldState.guild.id;
+    const queue = serverQueues.get(guildId);
+    if (!queue || !queue.connection) return;
+
+    const channel = oldState.channel;
+    if (!channel || channel.id !== queue.voiceChannel.id) return;
+
+    const nonBotMembers = channel.members.filter(member => !member.user.bot);
+
+    // 모두 퇴장한 경우
+    if (nonBotMembers.size === 0) {
+        queue.player.stop();
+        queue.connection.destroy();
+        serverQueues.delete(guildId);
+
+        queue.textChannel.send({
+            embeds: [new EmbedBuilder()
+                .setColor('#FF9900')
+                .setTitle('👋 모두 퇴장')
+                .setDescription('모든 사용자가 음성 채널을 떠났습니다. 음악 재생을 종료합니다.')
+                .setTimestamp()]
+        });
+        return;
+    }
+
+    // 개별 유저 퇴장 처리
+    const leftUserTag = oldState.member.user.tag;
+    const currentSong = queue.songs[0];
+
+    // 대기열에서 해당 유저가 요청한 곡 삭제
+    const before = queue.songs.length;
+    queue.songs = queue.songs.filter(song => song.requestedBy !== leftUserTag);
+    const removed = before - queue.songs.length;
+
+    if (removed > 0) {
+        queue.textChannel.send({
+            embeds: [new EmbedBuilder()
+                .setColor('#FFA500')
+                .setTitle('🗑️ 곡 제거')
+                .setDescription(`${leftUserTag} 사용자의 곡 ${removed}개를 대기열에서 제거했습니다.`)
+                .setTimestamp()]
+        });
+    }
+
+    // 현재 곡도 해당 유저가 요청했으면 건너뜀
+    if (currentSong?.requestedBy === leftUserTag) {
+        queue.player.stop();
+    }
+});
 
     try {
         switch (command) {
@@ -79,10 +130,6 @@ client.on('messageCreate', async (message) => {
             case '셔플':
             case 'shuffle':
                 await shuffle(message, serverQueue);
-                break;
-            case '반복':
-            case 'loop':
-                await loop(message, serverQueue);
                 break;
             case '도움말':
             case 'help':
@@ -327,6 +374,18 @@ async function play(guild, song) {
 
 // 건너뛰기
 async function skip(message, serverQueue) {
+    const isAdmin = message.member.permissions.has('Administrator');
+    const isRequester = serverQueue.songs[0]?.requestedBy === message.author.tag;
+
+    if (!(isAdmin || isRequester)) {
+        const embed = new EmbedBuilder()
+            .setColor('#FF0000')
+            .setTitle('❌ 권한 부족')
+            .setDescription('현재 재생 중인 곡을 요청한 사람 또는 관리자만 건너뛰기 할 수 있습니다.')
+            .setTimestamp();
+        return message.channel.send({ embeds: [embed] });
+    }
+    
     if (!message.member.voice.channel) {
         const embed = new EmbedBuilder()
             .setColor('#FF0000')
@@ -357,6 +416,15 @@ async function skip(message, serverQueue) {
 
 // 정지
 async function stop(message, serverQueue) {
+    if (!message.member.permissions.has('Administrator')) {
+    const embed = new EmbedBuilder()
+        .setColor('#FF0000')
+        .setTitle('❌ 권한 부족')
+        .setDescription('이 명령어는 서버 관리자만 사용할 수 있습니다.')
+        .setTimestamp();
+    return message.channel.send({ embeds: [embed] });
+    }
+    
     if (!message.member.voice.channel) {
         const embed = new EmbedBuilder()
             .setColor('#FF0000')
@@ -428,6 +496,20 @@ async function showQueue(message, serverQueue) {
 
 // 일시정지
 async function pause(message, serverQueue) {
+    const isAdmin = message.member.permissions.has('Administrator');
+    const aloneInVC = message.member.voice.channel?.members.filter(m => !m.user.bot).size === 1;
+    const isRequester = serverQueue.songs[0]?.requestedBy === message.author.tag;
+
+    if (!(isAdmin || (aloneInVC && isRequester))) {
+        const embed = new EmbedBuilder()
+            .setColor('#FF0000')
+            .setTitle('❌ 권한 부족')
+            .setDescription('이 명령어는 관리자이거나, 혼자 있을 때 본인이 재생한 곡만 일시정지할 수 있습니다.')
+            .setTimestamp();
+        return message.channel.send({ embeds: [embed] });
+    }
+
+    
     if (!serverQueue || !serverQueue.playing) {
         const embed = new EmbedBuilder()
             .setColor('#FF0000')
@@ -450,6 +532,19 @@ async function pause(message, serverQueue) {
 
 // 재개
 async function resume(message, serverQueue) {
+    const isAdmin = message.member.permissions.has('Administrator');
+    const aloneInVC = message.member.voice.channel?.members.filter(m => !m.user.bot).size === 1;
+    const isRequester = serverQueue.songs[0]?.requestedBy === message.author.tag;
+
+    if (!(isAdmin || (aloneInVC && isRequester))) {
+        const embed = new EmbedBuilder()
+            .setColor('#FF0000')
+            .setTitle('❌ 권한 부족')
+            .setDescription('이 명령어는 관리자이거나, 혼자 있을 때 본인이 재생한 곡만 재개할 수 있습니다.')
+            .setTimestamp();
+        return message.channel.send({ embeds: [embed] });
+    }
+    
     if (!serverQueue || serverQueue.playing) {
         const embed = new EmbedBuilder()
             .setColor('#FF0000')
@@ -522,6 +617,15 @@ async function setVolume(message, serverQueue, args) {
     message.channel.send({ embeds: [embed] });
 }
 async function shuffle(message, serverQueue) {
+    if (!message.member.permissions.has('Administrator')) {
+    const embed = new EmbedBuilder()
+        .setColor('#FF0000')
+        .setTitle('❌ 권한 부족')
+        .setDescription('이 명령어는 서버 관리자만 사용할 수 있습니다.')
+        .setTimestamp();
+    return message.channel.send({ embeds: [embed] });
+    }
+    
     if (!serverQueue || serverQueue.songs.length <= 2) {
         const embed = new EmbedBuilder()
             .setColor('#FF0000')
@@ -552,7 +656,7 @@ async function shuffle(message, serverQueue) {
 async function showHelp(message) {
     const embed = new EmbedBuilder()
         .setColor('#0099FF')
-        .setTitle('🎵 뮤직봇 명령어')
+        .setTitle('🎵 유디봇 명령어')
         .setDescription('사용 가능한 모든 명령어입니다:')
         .addFields(
             { name: '!유튜브재생 <URL>', value: 'YouTube 음악 재생', inline: false },
@@ -565,7 +669,7 @@ async function showHelp(message) {
             { name: '!볼륨 <볼륨숫자>', value: '음악 소리 조정', inline: true },
             { name: '!도움말', value: '이 도움말 표시', inline: true }
         )
-        .setFooter({ text: '고음질 음악을 즐기세요! 🎶' })
+        .setFooter({ text: '유디 뮤직 | 고음질 음악을 즐기세요! 🎶' })
         .setTimestamp();
     
     message.channel.send({ embeds: [embed] });
