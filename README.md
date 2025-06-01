@@ -1,1 +1,64 @@
-# ud-music-bot-discord
+# 유튜브 재생봇 (디스코드)
+가장 간단하게 디스코드 유튜브봇을 시작해보세요!
+
+## 소개
+이 저장소는 간단하게 디스코드 유튜브봇을 만들고 실행할수 있습니다.
+
+## 기본 세팅 (윈도우)
+해당 봇은 Node.js를 기반으로 작동합니다. 이미 설치되어 있는것은 건너뛰어도 좋습니다.
+1. [해당 사이트](https://nodejs.org/ko/download)에서 Node.js v22 이상 버전을 설치합니다.
+2. [해당 사이트](https://git-scm.com/downloads/win)에 들어가 **Git for Windows/x64 Setup**을 눌러 Git을 설치합니다.
+3. 아래 명령어를 실행하여 해당 저장소를 클론합니다.
+```bash
+git clone https://github.com/team-ud9/ud-music-bot-discord.git
+```
+
+## 기본 세팅 (리눅스)
+해당 봇은 Node.js를 기반으로 작동합니다. 이미 설치되어 있는것은 건너뛰어도 좋습니다. 설치 시 root 권한이 필요합니다.
+1. 아래 명령어들을 사용하여 nvm(nodejs 설치 프로그램)과 Node.js 22를 설치합니다. (nvm 명령어가 실행이 안될 시 환경변수 경로지정 해주세요.)
+```bash
+# nvm 설치
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
+
+# nodejs 22 설치
+nvm install 22
+```
+2. 아래 명령어로 Git을 설치합니다.
+```bash
+sudo apt-get install git
+```
+3. 아래 명령어로 해당 저장소를 클론합니다.
+```bash
+git clone https://github.com/team-ud9/ud-music-bot-discord.git
+```
+
+## 기본 세팅 (공동)
+일단 세팅해주어야 하는것은 디스코드 봇 토큰입니다.
+
+먼저 `.env.example` 파일의 이름을 `.env`로 바꾼 후 수정합니다.(메모장등 활용, 파일이 안보일 시 숨겨진 파일 보기, 윈도우 기준)
+
+들어가면 `DISCORD_BOT_TOKEN=어쩌고저쩌고`라고 되어있습니다. 여기서 `...TOKEN=`뒤에 부분을 자신의 봇의 토큰을 입력합니다.
+
+## 실행
+원래라면 직접 패키지를 설치하고 실행해야하지만 편의를 위해 sh(리눅스)와 bat(윈도우)파일을 만들어 두었습니다. 여러분은 해당 파일만 실행시키면 됩니다.
+
+### 리눅스
+아래 명령어를 사용하여 먼저 sh 파일에 권한을 부여합니다.
+```bash
+chmod 755 run.sh
+```
+그런 다음 실행합니다.
+```bash
+./run.sh
+```
+
+### 윈도우
+윈도우에서는 그냥 `run.bat`파일을 실행하면 됩니다.
+
+### 종료
+종료는 둘 다 쉘 창에서 `Ctrl + C` 키를 누르면 종료됩니다.
+
+## 라이선스
+해당 봇의 소스의 라이선스는 `MIT 라이선스` 입니다.
+
+저작자만 표시하시면 상업적, 홍보등의 어떤 목적에서도 사용하실 수 있습니다. 자세한 것은 [LICENSE](https://github.com/team-ud9/ud-music-bot-discord/blob/main/LICENSE) 파일 참고 바랍니다.
