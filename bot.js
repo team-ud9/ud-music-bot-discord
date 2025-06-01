@@ -562,6 +562,7 @@ async function showHelp(message) {
             { name: '!일시정지', value: '음악 일시정지', inline: true },
             { name: '!재개', value: '음악 재생 재개', inline: true },
             { name: '!셔플', value: '대기열 섞기', inline: true },
+            { name: '!볼륨 <볼륨숫자>', value: '음악 소리 조정', inline: true },
             { name: '!도움말', value: '이 도움말 표시', inline: true }
         )
         .setFooter({ text: '고음질 음악을 즐기세요! 🎶' })
