@@ -1,0 +1,30 @@
+{
+  "name": "ud-music-bot",
+  "version": "1.0.0",
+  "main": "bot.js",
+  "scripts": {
+    "start": "node bot.js"
+  },
+  "dependencies": {
+    "@discordjs/opus": "^0.9.0",
+    "@discordjs/voice": "^0.16.1",
+    "@distube/ytdl-core": "^4.16.10",
+    "discord.js": "^14.14.1",
+    "dotenv": "^16.5.0",
+    "ffmpeg-static": "^5.2.0",
+    "libsodium-wrappers": "^0.7.11",
+    "opusscript": "^0.0.8",
+    "prism-media": "^1.3.5",
+    "sodium": "^3.0.2",
+    "ytpl": "^2.3.0"
+  },
+  "keywords": [
+    "discord",
+    "bot",
+    "music",
+    "youtube",
+    "nodejs"
+  ],
+  "author": "Team ud9",
+  "license": "MIT"
+}
