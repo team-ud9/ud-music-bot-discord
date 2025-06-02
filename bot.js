@@ -139,6 +139,10 @@ client.on('voiceStateUpdate', (oldState, newState) => {
             case 'volume':
                 await setVolume(message, serverQueue, args);
                 break;
+            case '강제종료':
+            case 'forceleave':
+                await forceLeave(message, serverQueue);
+                break;
         }
     } catch (error) {
         console.error('명령어 처리 중 오류:', error);
@@ -299,61 +303,69 @@ async function execute(message, serverQueue, args) {
 async function play(guild, song) {
     const serverQueue = serverQueues.get(guild.id);
     if (!song) {
-        if (serverQueue.connection) {
+        if (serverQueue?.connection) {
             serverQueue.connection.destroy();
         }
         serverQueues.delete(guild.id);
-        
+
         const embed = new EmbedBuilder()
             .setColor('#0099FF')
             .setTitle('👋 재생 종료')
             .setDescription('대기열이 비어 음성 채널에서 나갔습니다.')
             .setTimestamp();
-        serverQueue.textChannel.send({ embeds: [embed] });
+
+        serverQueue?.textChannel.send({ embeds: [embed] });
         return;
     }
 
     try {
-        // 최고 품질 오디오 포맷 확인
+        // 최고 품질 포맷 가져오기
         const bestFormat = await getBestAudioFormat(song.url);
         console.log(`재생할 곡: ${song.title}`);
         if (bestFormat) {
             console.log(`선택된 오디오 포맷: ${bestFormat.container} - ${bestFormat.audioBitrate || 'Unknown'}kbps`);
         }
 
-        // 안정적인 고품질 스트림 생성 
+        // 고품질 스트림 생성
         const stream = await createRobustStream(song.url);
 
         // 오디오 리소스 생성
         const resource = createOptimalAudioResource(stream);
         const player = createAudioPlayer();
-        
+
+        serverQueue.audioResource = resource;
         serverQueue.player = player;
         serverQueue.connection.subscribe(player);
-        
         player.play(resource);
         serverQueue.playing = true;
 
-        // 볼륨 설정 적용
+        // 볼륨 적용
         if (resource.volume) {
             resource.volume.setVolume(serverQueue.volume);
         }
 
+        // 종료 예상 시간 계산
+        const songLength = parseDurationToSeconds(song?.duration);
+        const nowUnix = Math.floor(Date.now() / 1000);
+        const expectedEndUnix = nowUnix + songLength;
+
+        // 재생 중 알림 Embed
         const embed = new EmbedBuilder()
             .setColor('#00FF00')
             .setTitle('🎵 현재 재생 중')
             .setDescription(`**${song.title}**`)
             .addFields(
-                { name: '길이', value: song.duration, inline: true },
-                { name: '요청자', value: song.requestedBy, inline: true },
+                { name: '길이', value: `${song.duration} [<t:${expectedEndUnix}:R>]` || '알 수 없음', inline: true },
+                { name: '요청자', value: song.requestedBy || '알 수 없음', inline: true },
                 { name: '남은 곡', value: `${serverQueue.songs.length - 1}개`, inline: true },
                 { name: '오디오 품질', value: bestFormat ? `${bestFormat.container?.toUpperCase()} - ${bestFormat.audioBitrate || 'Unknown'}kbps` : '고품질', inline: true }
             )
             .setThumbnail(song.thumbnail)
             .setTimestamp();
-        
+
         serverQueue.textChannel.send({ embeds: [embed] });
 
+        // 다음 곡으로 넘어가기
         player.on(AudioPlayerStatus.Idle, () => {
             serverQueue.songs.shift();
             play(guild, serverQueue.songs[0]);
@@ -369,6 +381,20 @@ async function play(guild, song) {
         console.error('재생 오류:', error);
         serverQueue.songs.shift();
         play(guild, serverQueue.songs[0]);
+    }
+}
+
+function parseDurationToSeconds(durationStr) {
+    if (!durationStr || typeof durationStr !== 'string') return 0;
+    const parts = durationStr.split(':').map(Number);
+    if (parts.some(isNaN)) return 0;
+
+    if (parts.length === 3) {
+        return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    } else if (parts.length === 2) {
+        return parts[0] * 60 + parts[1];
+    } else {
+        return parts[0];
     }
 }
 
@@ -605,9 +631,9 @@ async function setVolume(message, serverQueue, args) {
     }
 
     serverQueue.volume = volume / 100;
-    if (serverQueue.connection && serverQueue.connection.state.resource) {
-        serverQueue.connection.state.resource.volume.setVolume(serverQueue.volume);
-    }
+    if (serverQueue.audioResource?.volume) {
+    	serverQueue.audioResource.volume.setVolume(serverQueue.volume);
+	}
 
     const embed = new EmbedBuilder()
         .setColor('#00FF00')
@@ -652,11 +678,52 @@ async function shuffle(message, serverQueue) {
     message.channel.send({ embeds: [embed] });
 }
 
+async function forceLeave(message, serverQueue) {
+    if (!message.member.permissions.has('Administrator')) {
+        const embed = new EmbedBuilder()
+            .setColor('#FF0000')
+            .setTitle('❌ 권한 부족')
+            .setDescription('이 명령어는 서버 관리자만 사용할 수 있습니다.')
+            .setTimestamp();
+        return message.channel.send({ embeds: [embed] });
+    }
+
+    const connection = getVoiceConnection(message.guild.id);
+    if (!connection) {
+        const embed = new EmbedBuilder()
+            .setColor('#FF9900')
+            .setTitle('📭 연결 없음')
+            .setDescription('현재 봇은 음성 채널에 접속해 있지 않습니다.')
+            .setTimestamp();
+        return message.channel.send({ embeds: [embed] });
+    }
+
+    // 재생 중단 및 대기열 초기화
+    if (serverQueue?.player) {
+        serverQueue.player.stop();
+    }
+
+    if (serverQueue?.songs) {
+        serverQueue.songs = [];
+    }
+
+    connection.destroy();
+    serverQueues.delete(message.guild.id);
+
+    const embed = new EmbedBuilder()
+        .setColor('#FF0000')
+        .setTitle('🛑 강제 종료')
+        .setDescription('음성 채널에서 퇴장하고 모든 재생 정보를 초기화했습니다.')
+        .setTimestamp();
+
+    message.channel.send({ embeds: [embed] });
+}
+
 // 도움말
 async function showHelp(message) {
     const embed = new EmbedBuilder()
         .setColor('#0099FF')
-        .setTitle('🎵 유디봇 명령어')
+        .setTitle('🎵 뮤직봇 명령어')
         .setDescription('사용 가능한 모든 명령어입니다:')
         .addFields(
             { name: '!유튜브재생 <URL>', value: 'YouTube 음악 재생', inline: false },
@@ -669,7 +736,7 @@ async function showHelp(message) {
             { name: '!볼륨 <볼륨숫자>', value: '음악 소리 조정', inline: true },
             { name: '!도움말', value: '이 도움말 표시', inline: true }
         )
-        .setFooter({ text: '유디 뮤직 | 고음질 음악을 즐기세요! 🎶' })
+        .setFooter({ text: '고음질 음악을 즐기세요! 🎶' })
         .setTimestamp();
     
     message.channel.send({ embeds: [embed] });
